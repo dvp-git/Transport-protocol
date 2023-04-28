@@ -209,10 +209,10 @@ void A_output(message)
 
 void A_timerinterrupt()
 {
-  if (A_ack_received == 1)
-  {
-    return;
-  }
+  // if (A_ack_received == 1)
+  // {
+  //   return;
+  // }
  printf("\n----------Timer interrupt at %f------------",get_sim_time());
   // retransmit packet with acknowledgement number we are waiting for
   // while(A_ack_received==0)
@@ -222,6 +222,10 @@ void A_timerinterrupt()
   starttimer(0,15.0);
   // A_new_expected_ack_time = get_sim_time() + 15.0;
   tolayer3(0, A_pckt_copy);
+  if (A_ack_received == 1)
+  {
+    return;
+  }
 }
 
 
