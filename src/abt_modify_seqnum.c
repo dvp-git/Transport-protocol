@@ -239,6 +239,7 @@ void A_input(packet)
  // Check order of ACK
   if (!A_ack_received)
   {
+    // ACK delayed, ACK corrupt, ACK lost
   if (ACK_order_status(&packet, A_seq_counter))
   {
   int recvd_ACK_checksum  = calculate_checksum(&packet);
@@ -258,9 +259,10 @@ void A_input(packet)
     }
   }
   return ;
-  } else{
-    printf("\n\n ACK received is corrupt/delayed : Awaiting new packet");
-    printf("\n\n Retranmission on the way due to corrupt/delayed ACK : %f",get_sim_time());
+  }
+  else{
+    printf("\n\n Duplicate ACK or ACK corrupt/lost : Awaiting latest ack");
+    printf("\n\n Retranmission of ACK on the way due to corrupt/delayed ACK : %f",get_sim_time());
     // tolayer3(0, A_pckt_copy);
     // starttimer(0,15.0);
   return;
@@ -347,6 +349,7 @@ struct pkt packet;
   }
      else{
    printf("\nINVALID checksum or duplicate packet");
+   // Resending the ACK
    tolayer3(1,B_pckt_copy);
    return;
   }
