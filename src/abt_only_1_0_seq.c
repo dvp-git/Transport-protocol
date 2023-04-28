@@ -1,5 +1,6 @@
 
 #include<stdio.h>
+#include<stdlib.h>
 #include<string.h> // Added string library
 #include "../include/simulator.h"
 
@@ -73,7 +74,7 @@ void create_checksum(struct pkt *p)
 
 int message_order_status(struct pkt *p, int seqnum)
 {
-  if (p->seqnum + p->acknum  == seqnum)
+  if (p->seqnum == seqnum)
     return 1;
   else 
     return 0;
@@ -169,7 +170,7 @@ void A_output(message)
   // A_ack_counter += A_ack_counter + 32; // since size of a packet is 32
   struct pkt packt_out;
   packt_out.seqnum = A_seq_counter;
-  packt_out.acknum = A_ack_counter + sizeof(packt_out);
+  packt_out.acknum = A_ack_counter;
   strncpy(packt_out.payload, message_1.data, 20);
 
    //printf("\n\nPackt out Seq: %d Ack:%d Data:%s Checksum:%d",packt_out.seqnum,packt_out.acknum, packt_out.payload, packt_out.checksum);
@@ -209,10 +210,7 @@ void A_output(message)
 
 void A_timerinterrupt()
 {
-  if (A_ack_received == 1)
-  {
-    return;
-  }
+
  printf("\n----------Timer interrupt at %f------------",get_sim_time());
   // retransmit packet with acknowledgement number we are waiting for
   // while(A_ack_received==0)
@@ -222,6 +220,10 @@ void A_timerinterrupt()
   starttimer(0,15.0);
   // A_new_expected_ack_time = get_sim_time() + 15.0;
   tolayer3(0, A_pckt_copy);
+    if (A_ack_received == 1)
+  {
+    return;
+  }
 }
 
 
@@ -240,7 +242,7 @@ void A_input(packet)
   if (!A_ack_received)
   {
     // ACK delayed, ACK corrupt, ACK lost
-  if (ACK_order_status(&packet, A_seq_counter))
+  if (ACK_order_status(&packet, abs(A_seq_counter-1)))
   {
   int recvd_ACK_checksum  = calculate_checksum(&packet);
   if (packet.checksum == recvd_ACK_checksum)
@@ -254,8 +256,8 @@ void A_input(packet)
     printf("\nACK received");
     printf("\n------------------------------");
     // A_prev_seq = A_seq_counter;
-    A_seq_counter ++;
-    A_ack_counter += 32;
+    A_seq_counter = abs(A_seq_counter - 1);
+    A_ack_counter = abs(A_ack_counter - 1);
     }
   }
   return ;
@@ -285,8 +287,9 @@ void A_init()
     return ;
 }
 
-/* Note that with simplex transfer from a-to-B, there is no B_output() */
 
+
+/* Note that with simplex transfer from a-to-B, there is no B_output() */
 /* called from layer 3, when a packet arrives for layer 4 at B*/
 void B_input(packet)
 struct pkt packet;
@@ -312,15 +315,15 @@ struct pkt packet;
   // int duplicate = duplicate(&packet, B_ack_counter);
   // if (!duplicate)
   // {
-  if (message_order_status(&packet, B_ack_counter))
+  if (message_order_status(&packet, B_seq_counter))
   {
     printf("\n\nReceived first time");
   int recvd_packet_checksum  = calculate_checksum(&packet);
   if (packet.checksum == recvd_packet_checksum)
     {
      printf("\n\n Receiver received Correct packet");
-      B_seq_counter = packet.seqnum;
-      // B_prev_ack = B_ack_counter;
+      B_seq_counter = abs(1-packet.seqnum);
+      B_ack_counter = abs(1-packet.acknum);
       // Send a new packet ACK to A 
       struct pkt ACK_packt;
       ACK_packt.acknum = B_ack_counter;
@@ -331,18 +334,16 @@ struct pkt packet;
       B_pckt_copy = ACK_packt;
     // IF ALL GOOD , send to layer5 (up) and send ACK to tolayer3
     // Send ACK tolayer3 - calls function A_input
+      tolayer3(1,ACK_packt);
       tolayer5(1,packet.payload);
       printf("\n\n ACK Transmission time: %f",get_sim_time());
-      tolayer3(1,ACK_packt);
       printf("\n Transmitting ACK packt seq %d",ACK_packt.seqnum);
      printf("\n Transmitting ACK packt ack %d",ACK_packt.acknum);
      printf("\n Transmitting ACK packt message %s",ACK_packt.payload);
       printf("\n Transmitting ACK packt checksum %d",ACK_packt.checksum);
       // starttimer(1,15.0);
-      B_ack_counter += 33;
+      // B_ack_counter += 33;
       // float b_ack_timer = get_sim_time();
-
-
       // Increment the ACK counter
     }
   return;
@@ -359,9 +360,8 @@ struct pkt packet;
 /* entity B routines are called. You can use it to do any initialization */
 void B_init()
 {
-//  B_prev_ack = 0;
- B_seq_counter = 0;
- B_ack_counter = 33;
+ B_seq_counter = 1;
+ B_ack_counter = 0;
  return ;
 }
 
