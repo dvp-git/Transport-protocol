@@ -1,5 +1,7 @@
 #include "../include/simulator.h"
-
+#include<stdio.h>
+#include<stdlib.h>
+#include<string.h>
 /* ******************************************************************
  ALTERNATING BIT AND GO-BACK-N NETWORK EMULATOR: VERSION 1.1  J.F.Kurose
 
@@ -15,22 +17,47 @@
 
 /********* STUDENTS WRITE THE NEXT SEVEN ROUTINES *********/
 
-int A_seq_counter;
+
+
+
+int A_ack_received;
+
+
+int base;
+int nextseqnum;
+int Window_size;
+
 int A_ack_counter; 
 int B_seq_counter;
 int B_ack_counter;
-int A_ack_received;
-struct msg A_buffer[1000];
-int buffer_index;
-struct pkt A_pckt_copy; 
+
+
+struct pkt send_buffer[1000]; 
+// struct msg App_layer_buffer[1000];
+
+int send_idx;
+int store_idx;
+
+
+// struct pkt A_pckt_copy; 
 struct pkt B_pckt_copy ;
+
+
+struct pkt create_pkt(struct msg *M, int seqnum , int acknum)
+{
+  struct pkt packt_out;
+  packt_out.seqnum = seqnum;
+  packt_out.acknum = acknum;
+  strncpy(packt_out.payload, M->data, 20);
+  return packt_out;
+}
+
+
 
 
 void create_checksum(struct pkt *p)
 {
   int checksum = 0;
-  // printf("\n\n Inner pointer address %p", &p);
-  // printf("\n\n Pointer value (should contain packet arguments address p %lx",p);
 
   // Add the seqnum and acknum
   checksum += p->seqnum;
@@ -51,16 +78,16 @@ void create_checksum(struct pkt *p)
 
 int message_order_status(struct pkt *p, int seqnum)
 {
-  if (p->seqnum + p->acknum  == seqnum)
+  if (p->seqnum == seqnum)
     return 1;
   else 
     return 0;
 }
 
 
-int ACK_order_status(struct pkt *p, int seqnum)
+int ACK_order_status(struct pkt *p, int base)
 {
-  if (p->seqnum == seqnum)
+  if (p->acknum == base)
     return 1;
   else  
     return 0;
@@ -85,24 +112,27 @@ int calculate_checksum(struct pkt *p)
 }
 
 
-struct msg pop(struct msg A_buffer[50])
+// Method to pop packet from buffer  
+struct msg pop(struct msg send_buffer[50])
 {
   struct msg tmp;
   int i;
-  if (A_buffer[0].data[0]!='\0')
+  if (send_buffer[0].data[0]!='\0')
   {
-    strncpy(tmp.data, A_buffer[0].data, sizeof(A_buffer[0].data));
-    for(i=0 ; A_buffer[i+1].data[0]!='\0'; i++)
-      A_buffer[i] = A_buffer[i+1];
-    strcpy(A_buffer[i].data,"\0");
+    strncpy(tmp.data, send_buffer[0].data, sizeof(send_buffer[0].data));
+    for(i=0 ; send_buffer[i+1].data[0]!='\0'; i++)
+      send_buffer[i] = send_buffer[i+1];
+    strcpy(send_buffer[i].data,"\0");
   }
   return tmp;
 }
 
-int buffer_empty(struct msg A_buffer[50])
+
+// Return true if buffer is empty
+int buffer_empty(struct msg send_buffer[50])
 {
-  printf("\nBuffer value first element %c",A_buffer[0].data[0]);
-  if (A_buffer[0].data[0] == '\0')
+  printf("\nBuffer value first element %c",send_buffer[0].data[0]);
+  if (send_buffer[0].data[0] == '\0')
     return 1;
   else
     return 0;
@@ -113,64 +143,78 @@ int buffer_empty(struct msg A_buffer[50])
 void A_output(message)
   struct msg message;
 {
-  printf("\n\n ACK value %d",A_ack_received);
-  // Buffer not empty
-  if (!A_ack_received)
+  struct pkt packetout;
+  // Two buffers available : App_layer_buffer and Send_buffer
+  // - Sample : Window size is 10.
+  // - 10 messages trasnmitted first. [ Move it to the window buffer, and transmit.]
+  //   - base 0 to 10 increase iff [ nextseqnum < base + Window] : SEND THE PACKETS / transmit
+  //   - if nextseqnum == base + Window : STOP SENDING THE PACKETS, STORE THEM in the buffer indefinitely using store index, i.e Update store index to the latest next sequence number and store it in the buffer
+  //   - if ACK is received, then 
+  // send_buffer is full, move the messages to app layer
+
+// Window =  10
+  if (nextseqnum < (base + Window_size))
   {
-  // Store packets in A_buffer , previous ACK not received yet
-  printf("\nMessage data %s",message.data);
-  strncpy(A_buffer[buffer_index].data, message.data, 20);
-  buffer_index ++;
-  }
-  else
-  {
-    struct msg message_1;
-  // Start popping the elemnts
-  if (A_seq_counter == 1 && buffer_empty(A_buffer))
-    message_1 = message;
-  else if (!(buffer_empty(A_buffer)))
-  {
-    strncpy(A_buffer[buffer_index].data, message.data, 20);
-    message_1 = pop(A_buffer);
-  }
-  else
-    message_1 = message;
+    if (send_buffer[nextseqnum].payload[0]=='\0')
+    {
+      packetout = create_pkt(&message, nextseqnum , A_ack_counter);
+      create_checksum(&packetout);
+      send_buffer[nextseqnum] = packetout;
+    }
+    // else{
+    //   send_buffer[nextseqnum] = packetout;
+    //   }
+      // Transmitting messages 
+      printf("\n Transmitting message packt seq %d",packetout.seqnum);
+      printf("\n Transmitting message packt ack %d",packetout.acknum);
+      printf("\n Transmitting message packt message %s",packetout.payload);
+      printf("\n Transmitting message packt checksum %d",packetout.checksum);
 
-  struct pkt packt_out;
-  packt_out.seqnum = A_seq_counter;
-  packt_out.acknum = A_ack_counter + sizeof(packt_out);
-  strncpy(packt_out.payload, message_1.data, 20);
+      // Send packt to B in until window is full
+      tolayer3(0,send_buffer[nextseqnum]);
 
-  //printf("\n\nPackt out Seq: %d Ack:%d Data:%s Checksum:%d",packt_out.seqnum,packt_out.acknum, packt_out.payload, packt_out.checksum);
-  
-  // Create a checksum value
-  create_checksum(&packt_out);
-  
-  // Make a deep copy of the packet for retransmission
-  A_pckt_copy = packt_out;
-
-  // Print out transmitted packet
- printf("\n Transmitting message packt seq %d",packt_out.seqnum);
- printf("\n Transmitting message packt ack %d",packt_out.acknum);
- printf("\n Transmitting message packt message %s",packt_out.payload);
- printf("\n Transmitting message packt checksum %d",packt_out.checksum);
-  // printf("\n Length of packt %ld", sizeof(packt_out));
-  // printf("\n Size of  int %ld", sizeof(int));
-
-
-
-  // Then send the packet (in-order) waiting for ACK for 16 time units
-  starttimer(0, 15.0);
-
-  // Update that we're waiting for ACK
-  A_ack_received = 0;
-  
-  printf("\nTimer A started");
-  tolayer3(0, packt_out);
-  printf("\nTransmission time %f",get_sim_time());
-  }
-  return;
+        // Window Full, start timer
+        if (base == nextseqnum)
+        {
+          printf("\nTimer A started");
+          starttimer(0,18.0);
+          printf("\nTransmission time of oldest unack'd packt %f",get_sim_time());
+        }
+      // Increment sequence number
+      nextseqnum += 1; 
+      printf("\nNextSeqNum %d",nextseqnum);
+       // }
+    }
+    else
+    {
+      if (store_idx < nextseqnum)
+      {
+        store_idx = nextseqnum;
+      }
+      packetout = create_pkt(&message, store_idx , A_ack_counter);
+      create_checksum(&packetout);
+      send_buffer[store_idx] = packetout;
+      printf("\n\nStoring the packet in the buffer: Waiting for ACKs");
+      store_idx ++;
+    }
 }
+
+
+void A_timerinterrupt()
+{
+  printf("\n----------Timer interrupt at %f------------",get_sim_time());
+  // retransmit packet with acknowledgement number we are waiting for
+  // while(A_ack_received==0)
+  printf("\n\nRetransmission of packets");
+  starttimer(0,18.0);
+  // A_new_expected_ack_time = get_sim_time() + 15.0;
+  for (int i=base; i < nextseqnum-1; i++)
+  {
+  printf("\n\nnRetransmission Time : %f packet no: %d",get_sim_time(),i); 
+  tolayer3(0, send_buffer[i]);
+  }
+}
+
 
 
 
@@ -178,31 +222,50 @@ void A_output(message)
 void A_input(packet)
   struct pkt packet;
 {
+  // Received ACK ? timerinterrupt 
+  printf("\n Receiving Ack packt time %f",get_sim_time());
+  printf("\n Receiving ACk packt seq %d",packet.seqnum);
+  printf("\n Receiving ACk packt ack %d",packet.acknum);
+  printf("\n Receiving ACk packt message %s",packet.payload);
+  printf("\n Receiving ACk packt checksum %d",packet.checksum);
+ // Check order of ACK
+  if (ACK_order_status(&packet, base))
+  {
+  int recvd_ACK_checksum  = calculate_checksum(&packet);
+  if (packet.checksum == recvd_ACK_checksum)
+    {
+    A_ack_received = 1;
+    base = packet.acknum + 1;
+    Window_size += 1;
+    printf("\nReceived Correct acknowledgement");
+    printf("\n\n Acknowledgement Time : %f",get_sim_time());
+    printf("\nACK received");
+    printf("\n------------------------------");
 
+    if (base == nextseqnum)
+    {
+      printf("\nBase = Next Seq");
+      stoptimer(0);
+      }
+    else{
+      printf("\nTimer A re-started");
+      stoptimer(0);
+      starttimer(0,18.0);
+    // A_prev_seq = A_seq_counter;
+    // A_seq_counter ++;
+    // A_ack_counter += 32;
+    }
+  }
+  return ;
+  }else{
+    printf("\n\n ACK received is corrupt/delayed : Awaiting new packet");
+    printf("\n\n Retranmission on the way due to corrupt/delayed ACK : %f",get_sim_time());
+  return;
+}
 }
 
 /* called when A's timer goes off */
 
-void A_timerinterrupt()
-{
-  // if (A_ack_received == 1)
-  // {
-  //   return;
-  // }
- printf("\n----------Timer interrupt at %f------------",get_sim_time());
-  // retransmit packet with acknowledgement number we are waiting for
-  // while(A_ack_received==0)
-  
-  printf("\n\nRetransmission of packet");
-  printf("\n\nnRetransmission Time : %f",get_sim_time());
-  starttimer(0,15.0);
-  // A_new_expected_ack_time = get_sim_time() + 15.0;
-  tolayer3(0, A_pckt_copy);
-  if (A_ack_received == 1)
-  {
-    return;
-  }
-}
 
 
 /* the following routine will be called once (only) before any other */
@@ -211,13 +274,30 @@ void A_init()
 {
     // Initialize the sequence number
     // A_prev_seq = 0;
-    A_seq_counter=1;
-    A_ack_counter=0;
-    memset(A_buffer,'\0',sizeof(A_buffer));
+
+    //A_seq_counter = 1;
+    A_ack_counter = 0;
+
+    base = 0;
+    nextseqnum = 0;
+    // Set all the app layer buffer '\0'
+    // memset(App_layer_buffer,'\0',sizeof(App_layer_buffer));
     A_ack_received = 1;
-    buffer_index=0;
-    // Initialize the acknowledgement number
-    // 
+
+
+    // Get window size from running program and set all the window buffer to '\0'
+    Window_size = getwinsize();
+
+    send_idx = 0;
+    store_idx = Window_size;
+
+    // send_buffer = malloc(Window_size * sizeof(struct msg));
+    // memset(send_buffer,'\0',Window_size * sizeof(*send_buffer));
+    // send_buffer = malloc(1000 * sizeof(struct pkt));
+    memset(send_buffer,'\0',sizeof(*send_buffer)*1000);
+    printf("\nSize of send_buffer %ld",sizeof(*send_buffer)*1000);
+    // printf("\nSize of packet", sizeof(struct pkt));
+
     return ;
 }
 /* Note that with simplex transfer from a-to-B, there is no B_output() */
@@ -241,20 +321,13 @@ struct pkt packet;
 
   // Handle ordered delivery using the sequence numbers
   // CANNOT USE ACK RECEIVED SINCE IT IS A's VARIABLE
-  // if (A_ack_received == 0)
-  // {
-
-  // int duplicate = duplicate(&packet, B_ack_counter);
-  // if (!duplicate)
-  // {
-  if (message_order_status(&packet, B_ack_counter))
+  if (message_order_status(&packet, B_seq_counter))
   {
-    printf("\n\nReceived first time");
+  printf("\n\nReceived first time");
   int recvd_packet_checksum  = calculate_checksum(&packet);
   if (packet.checksum == recvd_packet_checksum)
     {
      printf("\n\n Receiver received Correct packet");
-      B_seq_counter = packet.seqnum;
       // B_prev_ack = B_ack_counter;
       // Send a new packet ACK to A 
       struct pkt ACK_packt;
@@ -264,25 +337,28 @@ struct pkt packet;
       create_checksum(&ACK_packt);
       // create a packet
       B_pckt_copy = ACK_packt;
+
+
     // IF ALL GOOD , send to layer5 (up) and send ACK to tolayer3
     // Send ACK tolayer3 - calls function A_input
       tolayer5(1,packet.payload);
       printf("\n\n ACK Transmission time: %f",get_sim_time());
       tolayer3(1,ACK_packt);
+
+
       printf("\n Transmitting ACK packt seq %d",ACK_packt.seqnum);
      printf("\n Transmitting ACK packt ack %d",ACK_packt.acknum);
      printf("\n Transmitting ACK packt message %s",ACK_packt.payload);
       printf("\n Transmitting ACK packt checksum %d",ACK_packt.checksum);
       // starttimer(1,15.0);
-      B_ack_counter += 33;
+      B_seq_counter += 1;
+      B_ack_counter += 1;
       // float b_ack_timer = get_sim_time();
-
-
       // Increment the ACK counter
     }
   return;
   }
-     else{
+  else{
    printf("\nINVALID checksum or duplicate packet");
    tolayer3(1,B_pckt_copy);
    return;
@@ -294,7 +370,7 @@ void B_init()
 {
 //  B_prev_ack = 0;
  B_seq_counter = 0;
- B_ack_counter = 33;
+ B_ack_counter = 0;
  return ;
 }
 
