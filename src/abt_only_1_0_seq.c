@@ -348,13 +348,13 @@ struct pkt packet;
     }
   return;
   }
-     else{
+   else{
    printf("\nINVALID checksum or duplicate packet");
    // Resending the ACK
    tolayer3(1,B_pckt_copy);
+   }
    return;
   }
-}
 
 /* the following routine will be called once (only) before any other */
 /* entity B routines are called. You can use it to do any initialization */
@@ -362,6 +362,8 @@ void B_init()
 {
  B_seq_counter = 1;
  B_ack_counter = 0;
+ B_pckt_copy.seqnum = 1;
+ B_pckt_copy.acknum = 0;
  return ;
 }
 
