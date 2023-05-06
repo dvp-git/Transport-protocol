@@ -18,7 +18,7 @@
 /********* STUDENTS WRITE THE NEXT SEVEN ROUTINES *********/
 int A_ack_received;
 
-int prev_base;
+
 int base;
 int nextseqnum;
 int Window_size;
@@ -155,6 +155,7 @@ void A_output(message)
   //   - base 0 to 10 increase iff [ nextseqnum < base + Window] : SEND THE PACKETS / transmit
   //   - if nextseqnum == base + Window : STOP SENDING THE PACKETS, STORE THEM in the buffer indefinitely using store index, i.e Update store index to the latest next sequence number and store it in the buffer
   //   - if ACK is received. 
+
 // Window =  10
   if (nextseqnum < (base + Window_size))
   {
@@ -164,14 +165,6 @@ void A_output(message)
       packetout = create_pkt(&message, nextseqnum , A_ack_counter);
       create_checksum(&packetout);
       send_buffer[nextseqnum] = packetout;
-    }
-    else
-    {
-      printf("\n Store IDX value %d",store_idx);
-      packetout = create_pkt(&message, store_idx , A_ack_counter);
-      create_checksum(&packetout);
-      send_buffer[store_idx] = packetout;
-      store_idx++;
     }
     // else Store has already put the value in this. Send the buffer[nextseq]
       // Transmitting messages 
@@ -200,9 +193,9 @@ void A_output(message)
     }
     else
     {
-      if (store_idx < nextseqnum)
+      if (store_idx < (nextseqnum))
       {
-          store_idx = nextseqnum;
+        store_idx = (nextseqnum);
       }
       printf("\nStore Idx: %d , NextSeqNum : %d", store_idx, nextseqnum);
       packetout = create_pkt(&message, store_idx , A_ack_counter);
@@ -255,7 +248,6 @@ void A_input(packet)
   if (packet.checksum == recvd_ACK_checksum)
     {
     A_ack_received = 1;
-    prev_base = base;
     base = packet.acknum ;
     //Removed window size : Window_size += 1;
     printf("\nReceived Correct acknowledgement");
@@ -284,19 +276,17 @@ void A_input(packet)
       starttimer(0,20.0);
     /* ADDING NEW CODE TO SEND PACKETS AS SOON AS ACK RECEIVED HERE - BIG BUG : DONT send packets again after acknowledgement. Send only next window packets*/
       printf("\nAck received for previous packet no: %d",base-1); 
-      // Since the packet ACK is received, check if next window in buffer is available or not
-      // Better yet, since cumulative acks are received, 
-      for (int idx = 0 ; idx < (base - prev_base) ; idx++)
+     /*for (int i = base; i < nextseqnum ; i++)
       {
-      if (!(buffer_empty(send_buffer[nextseqnum+idx],nextseqnum)))
+      if (!(buffer_empty(send_buffer[i], nextseqnum)))
       {
-      printf("\n\n Transmitting next : %f packet no: %d seqnum: %d ",get_sim_time(),nextseqnum+idx,send_buffer[nextseqnum+idx].seqnum); 
-      tolayer3(0, send_buffer[nextseqnum+idx]);
+      printf("\n\n Transmitting next : %f packet no: %d seqnum: %d ",get_sim_time(),i,send_buffer[nextseqnum].seqnum); 
+      tolayer3(0, send_buffer[i]);
       //printf("\n\n ----DEBUG--- %d",&send_buffer[i].seqnum);
-      printf("\n\n ----DEBUG--- %d",send_buffer[nextseqnum+idx].seqnum);
+      printf("\n\n ----DEBUG--- %d",send_buffer[i].seqnum);
       nextseqnum++;
       }
-      }
+      }*/
     }
   }
   return ;
@@ -421,7 +411,6 @@ void B_init()
  B_ack_counter = 1;
  B_pckt_copy.seqnum = 0;
  B_pckt_copy.acknum = 0;
- prev_base = -1;
  return ;
 }
 
